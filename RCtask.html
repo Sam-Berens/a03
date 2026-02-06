@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Story task</title>
+
+<!-- Set the favicon logo -->
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<!-- Unpack the main JSpsych module -->
+<script src="https://unpkg.com/jspsych@7.3.3"></script>
+
+<!-- JSpsych dependency to preload audio files -->
+<script src="https://unpkg.com/@jspsych/plugin-preload@1.1.2"></script>
+
+<!-- JSpsych dependency to initialize the microphone -->
+<script src="https://unpkg.com/@jspsych/plugin-initialize-microphone@1.0.0"></script>
+
+<!-- JSpsych dependency to fullscreen -->
+<script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.1.2"></script>
+
+<!-- JSpsych dependency for audio button response -->
+<script src="https://unpkg.com/@jspsych/plugin-audio-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for HTML button response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for HTML audio response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-audio-response@1.0.0"></script>
+
+<!-- JSpsych dependency for styling -->
+<link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" />
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<style>
+html {margin: 0 auto;max-width: 600px;}
+</style>
+
+<!-- Styling for red blinking record sign -->
+<style>
+.blinking {
+  -webkit-animation: 1s blink ease infinite;
+  -moz-animation: 1s blink ease infinite;
+  -ms-animation: 1s blink ease infinite;
+  -o-animation: 1s blink ease infinite;
+  animation: 1s blink ease infinite;
+  
+}
+@keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-moz-keyframes blink {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-webkit-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-ms-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-o-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+</style>
+    
+<script>
+// --- TaskIO SETUP ---
+var TaskIO = {};
+TaskIO.SubjectId = null;
+TaskIO.DateTime_Start = null;
+TaskIO.ClientTimeZone = null;
+TaskIO.StoryId = null;
+TaskIO.Trials = [];
+</script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Get DateTime_Start and ClientTimeZone (and add to TaskIO)  -->
+<script src="./Assets/SetDateTime.js"></script>
+
+<!-- Exclusion check -->
+<script src="./Assets/ExclusionCheck.js"></script>
+
+<!-- Get story IDs passed in from URL -->
+<script src="./GetStoryId.js"></script>
+
+<!-- Import the story/stories -->
+<script src="./Stories.js"></script>
+
+<!-- Import the story/stories -->
+<script src="./Questions.js"></script>
+
+<!-- Import unfocus checking -->
+<script src="./LogUnfocus.js"></script>
+
+<script>
+// Write the audio data
+function WriteAudioData(DataToSend){
+    var JsonPost = {
+        type: "POST",
+        url: './WriteAudioData.php',
+        dataType: 'json',
+        data: {FunctionCall: 'WriteAudioData', Args: DataToSend},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Function to save the TaskIO variable
+function WriteTaskIO() {
+    var JsonPost = {
+        type:"POST",
+        url:'./WriteXIO.php',
+        dataType: 'json',
+        data: {FunctionCall: 'WriteRCtaskIO', Args: {
+            SubjectId: SubjectId,
+            ClientTimeZone: ClientTimeZone,
+            StoryId: StoryId,
+            RCtaskIO: JSON.stringify(TaskIO)
+        }},
+        success: function(Obj,Textstatus){
+            if( !('error' in Obj) ){
+                return Obj.result;
+            }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Import the main jsPsych object
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        var P1 = WriteTaskIO().then(function(P1) {
+            TargetUrl = P1.TargetUrl;
+            window.location.replace(TargetUrl);
+        }).catch(function(Err) {
+            alert('An error has occurred.\nPlease report error code #200 to the experimenter:\n'+Err);
+            window.location.replace("./Error.html");
+        });
+    }
+});
+
+// Set microphone initialization
+var InitMic = {
+    type: jsPsychInitializeMicrophone
+};
+// This seems to be the old way of doing it ... 
+// ... jsPsych.pluginAPI.getMicrophoneRecorder();
+
+// Specify the EnterFullscreen event
+var EnterFullscreen = {
+    type: jsPsychFullscreen,
+    message: '<p style="color:black;">The task is ready to begin.</p><p style="color:black;">Please click the button below to continue.</p>',
+    fullscreen_mode: true,
+    delay_after: 1000,
+    on_finish: function() {EnforceUnfocus = true;}
+};
+
+// Specify the ExitFullscreen event
+var ExitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    on_finish: function() {EnforceUnfocus = false;}
+};
+
+// Specify the SentenceTrial event
+var SentenceTrial = {
+    type: jsPsychAudioButtonResponse,
+    stimulus: function(){
+        return jsPsych.timelineVariable('Audio');
+    },
+    choices: [],
+    prompt: function(){
+        return jsPsych.timelineVariable('Text');
+    },
+    trial_ends_after_audio: true
+};
+
+// Specify the TrialIndex global variable
+var TrialIndex = -1;
+
+// Specify the QuestionTrialA event
+var QuestionTrialA = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: function () {return '<p>'+jsPsych.timelineVariable('Text')+'</p>'},
+    choices: ['Start recording'],
+    on_start: function() {
+        TrialIndex = TrialIndex + 1;
+    }
+};
+
+// Specify the QuestionTrialB event
+var QuestionTrialB = {
+    type: jsPsychHtmlAudioResponse,
+    stimulus: function() {
+        return '<p><svg height="20" width="20" class="blinking"><circle cx="10" cy="10" r="9" fill="red" /></svg>  <b>Recording...</b></p><p>'+jsPsych.timelineVariable('Text')+'</p>';
+    },
+    recording_duration: 60000,
+    stimulus_duration: null,
+    done_button_label: 'Finish recording',
+    allow_playback: true,
+    show_done_button: true,
+    accept_button_label: 'Next question',
+    
+    on_finish: function(data){
+        var LastTrialId = StoryId[0]+TrialIndex.toString().padStart(2,'0');
+        var AudioDuration = data.rt;
+        
+        var DataToSend = {};
+        DataToSend.SubjectId = SubjectId;
+        DataToSend.TrialId = LastTrialId;
+        DataToSend.AudioDuration = AudioDuration;
+        DataToSend.AudioData = data.response;
+        
+        WriteAudioData(DataToSend).then(function(P1){
+            FileId = P1.FileId;
+            data.response = FileId;
+        }).then(function(){
+            // Update TaskIO.Trials:
+		    TrialObject = {
+			    TrialIndex: TrialIndex,
+			    TrialId: LastTrialId,
+ 			    FileId: FileId,
+			    AudioDuration: AudioDuration
+            };
+		    TaskIO.Trials.push(TrialObject);
+        });
+    }
+};
+
+// Specify the StoryTimeline and the QuestionTimeline
+var StoryTimeline;
+var QuestionTimeline;
+if (StoryId=='Amy') {
+    StoryTimeline = AmyStory;
+    QuestionTimeline = AmyQuestions;
+} else {
+    StoryTimeline = GeorgeStory;
+    QuestionTimeline = GeorgeQuestions;
+}
+
+// Specify the StoryLoop
+var StoryLoop = {
+    timeline: [SentenceTrial],
+    timeline_variables: StoryTimeline
+};
+
+// Specify the QuestionLoop
+var QuestionLoop = {
+    timeline: [QuestionTrialA,QuestionTrialB],
+    timeline_variables: QuestionTimeline
+};
+
+// Set the Preload object
+var Preload = {
+    type: jsPsychPreload,
+    audio: StoryTimeline.map(function(o) {return o.Audio;})
+};
+
+// Run JSpysch
+jsPsych.run([Preload,InitMic,EnterFullscreen,StoryLoop,QuestionLoop,ExitFullscreen]);
+
+</script>
+</head><body></body></html>

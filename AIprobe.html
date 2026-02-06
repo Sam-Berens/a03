@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>AI Probe</title>
+
+<!-- Set the favicon logo -->
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<!-- Unpack the main JSpsych module -->
+<script src="https://unpkg.com/jspsych@7.3.3"></script>
+
+<!-- JSpsych dependency to fullscreen -->
+<script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.1.2"></script>
+
+<!-- JSpsych dependency for HTML button response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for preloading -->
+<script src="https://unpkg.com/@jspsych/plugin-preload@1.1.2"></script>
+
+<!-- JSpsych dependency for styling -->
+<link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" />
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- More styling -->
+<style>
+body{background-color:black;}
+</style>
+    
+<script>
+// --- TaskIO SETUP ---
+var TaskIO = {};
+TaskIO.SubjectId = null;
+TaskIO.DateTime_Start = null;
+TaskIO.ClientTimeZone = null;
+TaskIO.Triplets = {};
+TaskIO.Trials = [];
+</script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Get DateTime_Start and ClientTimeZone (and add to TaskIO)  -->
+<script src="./Assets/SetDateTime.js"></script>
+
+<!-- Exclusion check -->
+<script src="./Assets/ExclusionCheck.js"></script>
+
+<!-- Import unfocus checking -->
+<script src="./LogUnfocus.js"></script>
+  
+<script>
+// Function to get the stimulus assignments from the Register table
+function GetAssignment(){
+    var JsonPost = {
+        type: "POST",
+        url: './GetAssignment.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GetAssignment', SubjectId: SubjectId},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    Vals = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Vals)});
+}
+  
+// Function to shuffle an array (used in GetTimelineVars)
+function Shuffle(array) {
+    let currentIndex = array.length,  randomIndex;
+    
+    // While there remain elements to shuffle.
+    while (currentIndex != 0) {
+        // Pick a remaining element.
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        
+        // And swap it with the current element.
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    }
+    return array;
+}
+    
+// Function to get the timeline variables
+async function GetTimelineVars() {
+    var Timeline = [];
+    
+    var iTrial = -1;
+    for (iRep = 0; iRep < 1; iRep++) { /////////////////////////////////////////////// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        var Order = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27];
+        Shuffle(Order);
+        for (iOrder = 0; iOrder < 28; iOrder++){
+            iTrial = iTrial + 1;
+            var TripletId = Triplets[Order[iOrder]].TripletId;
+            var Cue = Triplets[Order[iOrder]].Cue;
+            var Target = Triplets[Order[iOrder]].Target;
+            var Lure = Triplets[Order[iOrder]].Lure;
+            
+            var P1 = await fetch('./Assets/RandBit.php');
+            var Bit = await P1.json();
+            Bit = Bit==1;
+            Timeline.push({TripletId:TripletId,Cue:Cue,Target:Target,Lure:Lure,TargetOnRight:Bit});
+        }
+    }
+    return Timeline;
+}
+
+// Specify the hover event
+function MouseIn(img) {
+	if (!ResponseMade) {
+	    var ID = img.id;
+	    document.getElementById(ID).style = "border: 1px solid #00ffff;border-radius: 25px;width: 248px;vertical-align: middle;margin: 0px 60px;";
+	}
+}
+function MouseOut(img) {
+	if (!ResponseMade) {
+	    var ID = img.id;
+	    document.getElementById(ID).style = "vertical-align: middle;margin: 0px 60px;width: 250px;";
+	}
+}
+
+// Function to save the TaskIO variable
+function WriteTaskIO() {
+    var JsonPost = {
+        type:"POST",
+        url:'./WriteXIO.php',
+        dataType: 'json',
+        data: {FunctionCall: 'WriteAIprobeIO', Args: {
+            SubjectId: SubjectId,
+            ClientTimeZone: ClientTimeZone,
+            AIprobeIO: JSON.stringify(TaskIO)
+        }},
+        success: function(Obj,Textstatus){
+            if( !('error' in Obj) ){
+                return Obj.result;
+            }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Import the main jsPsych object
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        var P1 = WriteTaskIO().then(function(P1) {
+            TargetUrl = P1.TargetUrl;
+            window.location.replace(TargetUrl);
+        }).catch(function(Err) {
+            alert('An error has occurred.\nPlease report error code #200 to the experimenter:\n'+Err);
+            window.location.replace("./Error.html");
+        });
+    }
+});
+
+// Set some global variables that are avaible in all functions
+// High-level global variables
+var Assignment;
+var Triplets = [];
+var TimelineVars;
+
+// Trial specific global variables
+var TripletId = null;
+var TargetOnRight = null;
+var StartTimeOfTrial = null;
+var SelectedRight = null;
+var Correct = null;
+var RT = null;
+var ResponseMade = false;
+
+// Function to set what happens when an image is clicked
+function ImgClicked(Id) {
+    
+    if(!ResponseMade) {
+        // If no response was made previously (i.e., this is the first click)...
+        
+        // Set the response time
+        RT = jsPsych.getTotalTime() - StartTimeOfTrial;
+        
+        // Set SelectedRight
+        if (Id=="ImgLeft") {
+            SelectedRight = false;
+        } else {
+            SelectedRight = true;
+        }
+        
+        if (SelectedRight==false && TargetOnRight==false){
+            Correct = true;
+        } else if (SelectedRight==false && TargetOnRight==true){
+            Correct = false;
+        } else if (SelectedRight==true && TargetOnRight==true){
+            Correct = true;
+        } else if (SelectedRight==true && TargetOnRight==false){
+            Correct = false;
+        }
+        
+        // Change the appearence of the stimuli
+        document.getElementById(Id).style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #0000ff; border-radius: 25px; width: 248px;";
+        if (Id=='ImgLeft') {
+            document.getElementById('ImgRight').style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #000000; border-radius: 25px; width: 248px;";
+        } else {
+            document.getElementById('ImgLeft').style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #000000; border-radius: 25px; width: 248px;";
+        }
+        
+        // Set ResponseMade to be true so that the above code cannot be run again during the current trial
+        ResponseMade = true;
+    }
+}
+
+// Specify the preload event
+var PreloadImgs = {
+    type: jsPsychPreload,
+    images: [
+        './Stimuli/i00.png',
+        './Stimuli/i01.png',
+        './Stimuli/i02.png',
+        './Stimuli/i03.png',
+        './Stimuli/i04.png',
+        './Stimuli/i05.png',
+        './Stimuli/i06.png',
+        './Stimuli/i07.png',
+        './Stimuli/i08.png',
+        './Stimuli/i09.png',
+        './Stimuli/i10.png',
+        './Stimuli/i11.png'
+        ]
+};
+
+// Specifiy the EnterFullscreen event
+var EnterFullscreen = {
+    type: jsPsychFullscreen,
+    message: '<p style="color:white;">The task is ready to begin.</p><p style="color:white;">Please click the button below to continue.</p>',
+    fullscreen_mode: true,
+    delay_after: 1000,
+    on_finish: function() {EnforceUnfocus = true;}
+};
+
+// Specifiy the ExitFullscreen event
+var ExitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    on_finish: function() {EnforceUnfocus = false;}
+};
+
+// Specifiy the Fixation event
+var Fixation = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p><font color="#ffffff" size="30px">+</font></p>',
+    choices: [],
+    prompt: "",
+    trial_duration: 1000,
+    
+    // Reseting all the global variables (on_start is called at the begining of the trial)
+    on_start: function() {
+        TripletId = jsPsych.timelineVariable('TripletId');
+        TargetOnRight = jsPsych.timelineVariable('TargetOnRight');
+        ResponseMade = false;
+        SelectedRight = null;
+        Correct = null;
+        RT = null;
+    }
+};
+
+// Specify the Trial event
+var Trial = {
+    
+    // Set the start time:
+    on_start: function() {
+        StartTimeOfTrial = jsPsych.getTotalTime();
+    },
+    
+    // Set the type of this trial
+    type: jsPsychHtmlButtonResponse,
+    
+    // Set the stimuli to display
+    stimulus: function(){
+        // Specify the individual part of the stimulus HTML string
+        var Part1 = '<img src="./Stimuli/';
+        var Part3 = '.png" width="250" onmouseover="MouseIn(this)" onmouseout="MouseOut(this)" style="vertical-align:middle;margin:0px 60px" id="ImgLeft" onclick="javascript:ImgClicked(this.id)"> <img src="./Stimuli/';
+        var Part5 = '.png" width="250" style="vertical-align:top;margin-top:-150px;" id="ImgTop"> <img src="./Stimuli/';
+        var Part7 = '.png" width="250" onmouseover="MouseIn(this)" onmouseout="MouseOut(this)" style="vertical-align:middle;margin:0px 60px" id="ImgRight" onclick="javascript:ImgClicked(this.id)">';
+        var Cue = jsPsych.timelineVariable('Cue');
+        var Target = jsPsych.timelineVariable('Target');
+        var Lure = jsPsych.timelineVariable('Lure');
+        
+        // Construct the StimString based on the value of TargetOnRight
+        if(jsPsych.timelineVariable('TargetOnRight')){
+            var StimString = Part1+Lure+Part3+Cue+Part5+Target+Part7;
+        } else {
+            var StimString = Part1+Target+Part3+Cue+Part5+Lure+Part7;
+        }
+        return StimString;
+        },
+    
+    // Set the choices and prompt fields to be empty (we don't use them)
+    choices: [],
+    prompt: "",
+    
+    // Set the trial duration
+    trial_duration: 4000,
+    
+    // At the end of the trial, push the results into TaskIO.Trials
+    on_finish: function() {
+        var TrialObj = {
+            TripletId: TripletId,
+            Cue: {SasId: Triplets[TripletId].CueSas, ImgId: Triplets[TripletId].Cue},
+            Target: {SasId: Triplets[TripletId].TargetSas, ImgId: Triplets[TripletId].Target},
+            Lure: {SasId: Triplets[TripletId].LureSas, ImgId: Triplets[TripletId].Lure},
+            Dist2Target: Triplets[TripletId].Dist2Target,
+            TargetOnRight: TargetOnRight,
+            ResponseMade: ResponseMade,
+            Correct: Correct,
+            RT: RT
+        };
+        TaskIO.Trials.push(TrialObj);
+    }
+};
+
+
+// Chain together the following...
+// ... 1) GetAssignment()
+// ... 2) Make the Triplets variable
+// ... 3) GetTimelineVars()
+// ... 4) Make the TrialLoop
+// ... 5) Call jsPsych.run([TrialLoop])
+// ---
+// (1)...
+GetAssignment().then(function(P1) {
+    Assignment = P1.Assignment;
+    
+    // (2)...
+    Triplets.push({
+        TripletId:0,
+        Dist2Target:1,
+        Cue:Assignment['aA'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aC'],
+        CueSas:'A',
+        TargetSas:'B',
+        LureSas:'C'
+    });
+    Triplets.push({
+        TripletId:1,
+        Dist2Target:1,
+        Cue:Assignment['aB'],
+        Target:Assignment['aA'],
+        Lure:Assignment['aD'],
+        CueSas:'B',
+        TargetSas:'A',
+        LureSas:'D'
+    });
+    Triplets.push({
+        TripletId:2,
+        Dist2Target:1,
+        Cue:Assignment['aB'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aD'],
+        CueSas:'B',
+        TargetSas:'C',
+        LureSas:'D'
+    });
+    Triplets.push({
+        TripletId:3,
+        Dist2Target:1,
+        Cue:Assignment['aC'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aA'],
+        CueSas:'C',
+        TargetSas:'B',
+        LureSas:'A'
+    });
+    Triplets.push({
+        TripletId:4,
+        Dist2Target:1,
+        Cue:Assignment['aC'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aE'],
+        CueSas:'C',
+        TargetSas:'B',
+        LureSas:'E'
+    });
+    Triplets.push({
+        TripletId:5,
+        Dist2Target:1,
+        Cue:Assignment['aC'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aA'],
+        CueSas:'C',
+        TargetSas:'D',
+        LureSas:'A'
+    });
+    Triplets.push({
+        TripletId:6,
+        Dist2Target:1,
+        Cue:Assignment['aC'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aE'],
+        CueSas:'C',
+        TargetSas:'D',
+        LureSas:'E'
+    });
+    Triplets.push({
+        TripletId:7,
+        Dist2Target:1,
+        Cue:Assignment['aD'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aF'],
+        CueSas:'D',
+        TargetSas:'C',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:8,
+        Dist2Target:1,
+        Cue:Assignment['aD'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aB'],
+        CueSas:'D',
+        TargetSas:'C',
+        LureSas:'B'
+    });
+    Triplets.push({
+        TripletId:9,
+        Dist2Target:1,
+        Cue:Assignment['aD'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aF'],
+        CueSas:'D',
+        TargetSas:'E',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:10,
+        Dist2Target:1,
+        Cue:Assignment['aD'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aB'],
+        CueSas:'D',
+        TargetSas:'E',
+        LureSas:'B'
+    });
+    Triplets.push({
+        TripletId:11,
+        Dist2Target:1,
+        Cue:Assignment['aE'],
+        Target:Assignment['aF'],
+        Lure:Assignment['aC'],
+        CueSas:'E',
+        TargetSas:'F',
+        LureSas:'C'
+    });
+    Triplets.push({
+        TripletId:12,
+        Dist2Target:1,
+        Cue:Assignment['aE'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aC'],
+        CueSas:'E',
+        TargetSas:'D',
+        LureSas:'C'
+    });
+    Triplets.push({
+        TripletId:13,
+        Dist2Target:1,
+        Cue:Assignment['aF'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aD'],
+        CueSas:'F',
+        TargetSas:'E',
+        LureSas:'D'
+    });
+    Triplets.push({
+        TripletId:14,
+        Dist2Target:2,
+        Cue:Assignment['aA'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aD'],
+        CueSas:'A',
+        TargetSas:'C',
+        LureSas:'D'
+    });
+    Triplets.push({
+        TripletId:15,
+        Dist2Target:2,
+        Cue:Assignment['aB'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aE'],
+        CueSas:'B',
+        TargetSas:'D',
+        LureSas:'E'
+    });
+    Triplets.push({
+        TripletId:16,
+        Dist2Target:2,
+        Cue:Assignment['aC'],
+        Target:Assignment['aA'],
+        Lure:Assignment['aF'],
+        CueSas:'C',
+        TargetSas:'A',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:17,
+        Dist2Target:2,
+        Cue:Assignment['aC'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aF'],
+        CueSas:'C',
+        TargetSas:'E',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:18,
+        Dist2Target:2,
+        Cue:Assignment['aD'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aA'],
+        CueSas:'D',
+        TargetSas:'B',
+        LureSas:'A'
+    });
+    Triplets.push({
+        TripletId:19,
+        Dist2Target:2,
+        Cue:Assignment['aD'],
+        Target:Assignment['aF'],
+        Lure:Assignment['aA'],
+        CueSas:'D',
+        TargetSas:'F',
+        LureSas:'A'
+    });
+    Triplets.push({
+        TripletId:20,
+        Dist2Target:2,
+        Cue:Assignment['aE'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aB'],
+        CueSas:'E',
+        TargetSas:'C',
+        LureSas:'B'
+    });
+    Triplets.push({
+        TripletId:21,
+        Dist2Target:2,
+        Cue:Assignment['aF'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aC'],
+        CueSas:'F',
+        TargetSas:'D',
+        LureSas:'C'
+    });
+    Triplets.push({
+        TripletId:22,
+        Dist2Target:3,
+        Cue:Assignment['aA'],
+        Target:Assignment['aD'],
+        Lure:Assignment['aE'],
+        CueSas:'A',
+        TargetSas:'D',
+        LureSas:'E'
+    });
+    Triplets.push({
+        TripletId:23,
+        Dist2Target:3,
+        Cue:Assignment['aB'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aF'],
+        CueSas:'B',
+        TargetSas:'E',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:24,
+        Dist2Target:3,
+        Cue:Assignment['aE'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aA'],
+        CueSas:'E',
+        TargetSas:'B',
+        LureSas:'A'
+    });
+    Triplets.push({
+        TripletId:25,
+        Dist2Target:3,
+        Cue:Assignment['aF'],
+        Target:Assignment['aC'],
+        Lure:Assignment['aB'],
+        CueSas:'F',
+        TargetSas:'C',
+        LureSas:'B'
+    });
+    Triplets.push({
+        TripletId:26,
+        Dist2Target:4,
+        Cue:Assignment['aA'],
+        Target:Assignment['aE'],
+        Lure:Assignment['aF'],
+        CueSas:'A',
+        TargetSas:'E',
+        LureSas:'F'
+    });
+    Triplets.push({
+        TripletId:27,
+        Dist2Target:4,
+        Cue:Assignment['aF'],
+        Target:Assignment['aB'],
+        Lure:Assignment['aA'],
+        CueSas:'F',
+        TargetSas:'B',
+        LureSas:'A'
+    });
+    TaskIO.Triplets = Triplets;
+    
+    // (3)...
+    GetTimelineVars().then(function(P2){
+        TimelineVars = P2;
+        
+        // (4)...
+        var TrialLoop = {
+            timeline: [Fixation,Trial],
+            timeline_variables: TimelineVars,
+            randomize_order: false
+        };
+        
+        // (5)...
+        jsPsych.run([PreloadImgs,EnterFullscreen,TrialLoop,ExitFullscreen]);
+    });
+});
+
+</script>
+</head>
+<body>
+</body>
+</html>

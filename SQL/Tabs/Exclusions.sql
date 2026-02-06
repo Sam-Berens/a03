@@ -1,0 +1,7 @@
+CREATE TABLE `learning_a03_DataStore`.`Exclusions` ( 
+`PoolId` TEXT NULL DEFAULT NULL , 
+`SubjectId` TEXT NULL DEFAULT NULL , 
+`OS` TEXT NULL DEFAULT NULL , 
+`Browser` TEXT NULL DEFAULT NULL , 
+`DateTime_Exclude` DATETIME NULL DEFAULT NULL ) 
+ENGINE = MyISAM;

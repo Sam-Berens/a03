@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sorry!</title>
+<link rel="stylesheet" href="./Assets/w3.css">
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<style>
+body {
+    margin-left: 50px;
+    margin-top: 20px; 
+    margin-right: 50px; 
+}
+</style>
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<script>
+function GetReason() {
+    var JsonPost = {
+        type: "POST",
+        url: './CoventryActions.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GetReason', Args: {SubjectId: SubjectId}},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+        }
+    };
+	Data = jQuery.ajax(JsonPost);
+	return new Promise(resolve => {resolve(Data)});
+}
+
+function OnBodyLoad(){
+    if (SubjectId) {
+        GetReason().then(function(P1){
+            var iHTML = P1.HTML;
+            document.getElementById('Message').innerHTML = iHTML;
+            document.getElementById('Message').style = "max-width:700px;visibility:visible;";
+        });
+    } else {
+        document.getElementById('Message').style = "max-width:700px;visibility:visible;";
+    }
+}
+</script>
+</head>
+
+<body onload="OnBodyLoad()">
+<div class="w3-container" style="max-width:700px;visibility:hidden" id ="Message">
+<h1><b>Oops...</b></h1>
+<p>Sorry, it appears that we could not get a good microphone recording off you.</p>
+<p>This means that we will not be able to use your data &#128546;.</p>
+<p>Your participation has been discontinued. Please return your Prolific submission.</p>
+</div>
+</body>
+</html>

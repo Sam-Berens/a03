@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Thank you</title>
+<meta charset="UTF-8">
+
+<!-- Set the favicon logo -->
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<!-- Import the stylesheet -->
+<link rel="stylesheet" href="./Assets/w3.css">
+
+<!-- Some more styling -->
+<style>
+body {padding: 30px 0;}
+</style>
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Get DateTime_Start and ClientTimeZone (and add to TaskIO) -->
+<script src="./Assets/SetDateTime.js"></script>
+
+<script>
+// GetFeedback function
+function GetFeedback() {
+    var JsonPost = {
+        type: "POST",
+        url: './CompleteActions.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GetFeedback', SubjectId: SubjectId},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    Vals = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Vals)});
+}
+
+// GetCompletionLink function
+function GetCompletionLink() {
+    var JsonPost = {
+        type: "POST",
+        url: './CompleteActions.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GetCompletionLink', SubjectId: SubjectId},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    Vals = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Vals)});
+}
+
+// GetFeedback function
+function WriteFeedback() {
+    var JsonPost = {
+        type: "POST",
+        url: './CompleteActions.php',
+        dataType: 'json',
+        data: {
+            FunctionCall: 'WriteFeedback',
+            SubjectId: SubjectId,
+            Feedback: document.getElementById('FeedbackArea').value
+        },
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    Vals = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Vals)});
+}
+
+// OnBodyLoad
+var Editable = true;
+function OnBodyLoad() {
+    
+    // Run GetFeedback();
+    GetFeedback().then(function(P1) {
+       if (P1.FeedbackFound) {
+           Editable = false;
+           document.getElementById('FeedbackArea').value = P1.Feedback;
+           document.getElementById('FeedbackButton').innerText = 'Edit feedback';
+       } else {
+           document.getElementById("FeedbackArea").disabled = false;
+           document.getElementById('FeedbackButton').innerText = 'Submit feedback';
+       }
+    }).then(function(){
+        document.getElementById("FeedbackButton").disabled = false;
+    });
+    
+    // Run GetCompletionLink()
+    GetCompletionLink().then(function(P2) {
+        if (!P2.FoundSubject) {
+            alert('Sorry, we could not find any record of your participation.\nPlease contact Sam Berens at S.Berens@sussex.ac.uk.');
+        } else {
+            if (!P2.Completed) {
+                alert('Sorry, it appears that you have not completed all parts of the experiment yet. I am not sure how you ended up on this page.');
+            } else {
+                document.getElementById('CompletionLink').outerHTML = P2.CompletionLink;
+            }
+        }
+    });
+}
+
+// OnButtonClick
+function OnButtonClick() {
+    if (Editable) {
+        WriteFeedback().then(function(P1){
+            document.getElementById("FeedbackArea").disabled = true;
+            document.getElementById('FeedbackButton').innerText = 'Edit feedback';
+            Editable = false;
+        });
+    } else {
+        document.getElementById("FeedbackArea").disabled = false;
+        document.getElementById('FeedbackButton').innerText = 'Submit feedback';
+        Editable = true;
+    }
+}
+</script>
+</head>
+
+<body class = "w3-center" onload="OnBodyLoad()">
+<h1>Thank you! &#128591;</h1>
+<p>The experiment is now complete. Thank you for taking part.</p>
+<p>Please feel free to leave us any feedback that you have in the text box below.</p>
+<textarea id="FeedbackArea" rows="7" cols="67" disabled></textarea>
+<br /><button id="FeedbackButton" onclick="OnButtonClick()" disabled>Please wait</button>
+<br /><br />
+<p>When ready, please click on the link below to make your Prolific submission:<br />
+<a id="CompletionLink" href="./Error.html" target="_blank">###</a></p>
+</body>
+</html>

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Microphone test</title>
+
+<!-- Set the favicon logo -->
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<!-- Unpack the main JSpsych module -->
+<script src="https://unpkg.com/jspsych@7.3.3"></script>
+
+<!-- JSpsych dependency to initialize the microphone -->
+<script src="https://unpkg.com/@jspsych/plugin-initialize-microphone@1.0.0"></script>
+
+<!-- JSpsych dependency for HTML button response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for HTML audio response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-audio-response@1.0.0"></script>
+
+<!-- JSpsych dependency for function call -->
+<script src="https://unpkg.com/@jspsych/plugin-call-function@1.1.2"></script>
+
+<!-- JSpsych dependency for audio button response -->
+<script src="https://unpkg.com/@jspsych/plugin-audio-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for survey -->
+<script src="https://unpkg.com/@jspsych/plugin-survey@0.2.1"></script>
+
+<!-- JSpsych dependency for styling -->
+<link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" />
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- Styling for red blinking record sign -->
+<style>
+.blinking {
+  -webkit-animation: 1s blink ease infinite;
+  -moz-animation: 1s blink ease infinite;
+  -ms-animation: 1s blink ease infinite;
+  -o-animation: 1s blink ease infinite;
+  animation: 1s blink ease infinite;
+  
+}
+@keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-moz-keyframes blink {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-webkit-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-ms-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@-o-keyframes "blink" {
+  from, to {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+</style>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Get DateTime_Start and ClientTimeZone (and add to TaskIO)  -->
+<script src="./Assets/SetDateTime.js"></script>
+
+<!-- Exclusion check -->
+<script src="./Assets/ExclusionCheck.js"></script>
+
+<script>
+// Write the audio data
+function WriteAudioData(DataToSend){
+    var JsonPost = {
+        type: "POST",
+        url: './WriteAudioData.php',
+        dataType: 'json',
+        data: {FunctionCall: 'MicTest', Args: DataToSend},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Log the speaker test
+function LogSpeakerTest(DataToSend){
+    var JsonPost = {
+        type: "POST",
+        url: './LogSpeakerTest.php',
+        dataType: 'json',
+        data: {FunctionCall: 'LogSpeakerTest', Args: DataToSend},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Import the main jsPsych object
+var TargetUrl = './index.html?SubjectId='+SubjectId+'#';
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        window.location.replace(TargetUrl);
+    }
+});
+
+// Specify the instruction event
+var Instruction = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>This experiment requires you to use your computer microphone to record the answers to open-ended questions.</p><p>As such, before we begin, we just need to run a quick check to make sure that your microphone is working properly.</p>',
+    choices: ['Begin test']
+};
+
+// Set microphone initialization
+var InitMic = {
+    type: jsPsychInitializeMicrophone
+};
+// This seems to be the old way of doing it ... 
+// ... jsPsych.pluginAPI.getMicrophoneRecorder();
+
+// Specify the TrialIndex and AudioDuration global variables
+var TrialIndex = -1;
+var AudioDuration = null;
+
+// Specify the TrialA event
+var TrialA = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>Please record yourself counting from 1 to 10.</p><p>Please ensure to speak clearly.</p>',
+    choices: ['Start recording'],
+    on_start: function() {
+        TrialIndex = TrialIndex + 1;
+    }
+};
+
+// Specify the TrialB event
+var Success = false;
+var AudioUrl = '';
+var TrialB = {
+    type: jsPsychHtmlAudioResponse,
+    stimulus: function() {
+        return '<p><svg height="20" width="20" class="blinking"><circle cx="10" cy="10" r="9" fill="red" /></svg>  <b>Recording...</b></p>';
+    },
+    recording_duration: 30000,
+    stimulus_duration: null,
+    done_button_label: 'Finish recording',
+    allow_playback: true,
+    show_done_button: true,
+    accept_button_label: 'I can hear my voice okay',
+    save_audio_url: true,
+    
+    on_finish: function(data){
+        AudioDuration = data.rt;
+        AudioUrl = data.audio_url;
+        
+        var DataToSend = {};
+        DataToSend.SubjectId = SubjectId;
+        DataToSend.TrialId = 'MicTest'+TrialIndex.toString().padStart(2,'0');
+        DataToSend.TrialCount = TrialIndex;
+        DataToSend.AudioDuration = AudioDuration;
+        DataToSend.AudioData = data.response;
+        
+        WriteAudioData(DataToSend).then(function(P1){
+            Success = P1.Success;
+        });
+    }
+};
+
+// Specify the TrialC event
+var TrialC = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>Please wait while we check your audio...</p>',
+    choices: [],
+    trial_duration: 2000
+};
+
+// Specify the Oops event
+var Oops = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: "<p>Oops! It looks like we didn't quite get that.</p><p>Please try again.</p>",
+    choices: ['Repeat the microphe test']
+};
+
+
+// Specify the TryAgain timeline
+var TryAgain = {
+    timeline: [Oops,InitMic,TrialA,TrialB,TrialC],
+    conditional_function: function() { return !Success; },
+    loop_function: function() { return !Success; }
+};
+
+// Specify the QuestionLoop
+var MicTestLoop = {
+    timeline: [TrialA,TrialB,TrialC,TryAgain]
+};
+
+// Specify the SpeakerTestIntro event
+var SpeakerTestIntro = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>We are now going to run a quick speaker test.</p><p>Please listen carefully to the sounds that follow...</p>',
+    choices: ['Continue']
+};
+
+// PretrialOps
+var SecondTrialIndex = -1;
+var Path2Sound1 = '';
+var Path2Sound2 = '';
+var CR1 = null;
+var CR2 = null;
+var PretrialOps = {
+    type: jsPsychCallFunction,
+    func: function() {
+        SecondTrialIndex = SecondTrialIndex + 1;
+        var i1 = Math.round(Math.random()*6)+1;
+        var i2 = Math.round(Math.random()*6)+1;
+        Path2Sound1 = './Beeps/s'+i1.toString()+'.wav';
+        Path2Sound2 = './Beeps/s'+i2.toString()+'.wav';
+        CR1 = i1;
+        CR2 = i2;
+    }
+};
+
+// Specify the Preplay event
+var PrePlay = {
+    type: jsPsychAudioButtonResponse,
+    stimulus: function() {
+        return Path2Sound1;
+    },
+    choices: [],
+    prompt: '',
+    trial_ends_after_audio: true
+};
+
+// Specify the Postplay event
+var PostPlay = {
+    type: jsPsychAudioButtonResponse,
+    stimulus: function() {
+        return Path2Sound2;
+    },
+    choices: [],
+    prompt: '',
+    trial_ends_after_audio: true
+};
+
+// Specify the Playback event
+var Playback = {
+    type: jsPsychAudioButtonResponse,
+    stimulus: function() {
+        return AudioUrl;
+    },
+    choices: [],
+    prompt: '',
+    trial_ends_after_audio: true
+};
+
+// Question
+var Correct = false;
+var Question = {
+    type: jsPsychSurvey,
+    pages: [[{
+        type: 'drop-down',
+        prompt: 'How many tones were played before your recording?',
+        name: 'Before',
+        options: ['0','1','2','3','4','5','6','7'],
+        required: true},{type: 'html', prompt: '...'},{
+        type: 'drop-down',
+        prompt: 'How many tones were played after your recording?',
+        name: 'After',
+        options: ['0','1','2','3','4','5','6','7'],
+        required: true}]],
+    on_finish: function(data) {
+        var AR1 = parseInt(data.response.Before);
+        var AR2 = parseInt(data.response.After);
+        
+        var DataToSend = {};
+        DataToSend.SubjectId = SubjectId;
+        DataToSend.TrialCount = SecondTrialIndex;
+        DataToSend.CR1 = CR1;
+        DataToSend.CR2 = CR2;
+        DataToSend.AR1 = AR1;
+        DataToSend.AR2 = AR2;
+        
+        LogSpeakerTest(DataToSend).then(function(P1){
+            Correct = P1.Success;
+            TargetUrl = P1.TargetUrl;
+        });
+    }
+};
+
+// Specify the Pause event
+var Pause = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>Please wait while we check your response...</p>',
+    choices: [],
+    trial_duration: 2000
+};
+
+// SecondOops
+var SecondOops = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: "<p>Oops! It looks like the speakers may not be working properly.</p><p>Please try again.</p>",
+    choices: ['Repeate the speaker test']
+};
+
+// Specify the SecondTryAgain timeline
+var SecondTryAgain = {
+    timeline: [SecondOops,PretrialOps,PrePlay,Playback,PostPlay,Question,Pause],
+    conditional_function: function() { return !Correct; },
+    loop_function: function() { return !Correct; }
+};
+
+// SpeakerTestLoop
+var SpeakerTestLoop = {
+    timeline: [PretrialOps,PrePlay,Playback,PostPlay,Question,Pause,SecondTryAgain]
+};
+
+// Run JSpysch
+jsPsych.run([Instruction,InitMic,MicTestLoop,SpeakerTestIntro,SpeakerTestLoop]);
+
+</script>
+</head><body></body></html>

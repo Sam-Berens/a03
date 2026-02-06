@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Welcome</title>
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+<link rel="stylesheet" href="./Assets/w3.css">
+
+<style>
+body {
+    margin-left: 30px;
+    margin-top: 10px; 
+    margin-right: 30px; 
+}
+</style>
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Exclusion check -->
+<script src="./Assets/ExclusionCheck.js"></script>
+
+<script>
+
+function IsEmpty(Obj) {
+	for(var Key in Obj) {
+	if(Obj.hasOwnProperty(Key))
+			return false;
+	}
+	return true;
+}
+
+function GenSubjectId(PID){
+    var JsonPost = {
+        type: "POST",
+        url: './GenSubjectId.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GenSubjectId', PID: PID},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    if (PID != null){
+        Vals = jQuery.ajax(JsonPost);
+        return new Promise(resolve => {resolve(Vals)});
+    } else {
+        return new Promise(resolve => {resolve({SubjectId: null})});
+    }
+}
+
+function LogLanding() {
+    
+    var PpantIds = {};
+    
+    if (!PoolId && Boolean(SubjectId)) {
+        // They have definitely been here before!
+        PpantIds.PoolId = null;
+        PpantIds.SubjectId = SubjectId;
+    } else if (Boolean(PoolId) && Boolean(SubjectId)) {
+        // They may or may not have been here before!
+        PpantIds.PoolId = PoolId;
+        PpantIds.SubjectId = SubjectId;
+        
+    } else {
+        alert("An error has occured.\nPlease contant Sam: s.berens@sussex.ac.uk");
+    }
+    
+    // Construct the POST:
+    var JsonPost = {
+        type: "POST",
+        url: './LandingActions.php',
+        dataType: 'json',
+        data: {FunctionCall: 'LogLanding', Args: PpantIds},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    
+    // Submit the POST:
+    if (!IsEmpty(PpantIds)){
+        Vals = jQuery.ajax(JsonPost);
+        return new Promise(resolve => {resolve(Vals)});
+    } else {
+        return new Promise(resolve => {resolve({Destination: null})});
+    }
+}
+
+function OnBodyLoad() {
+    // Show form if needed:
+    if (GetUserInput) {
+        document.getElementById('IdForm').style.visibility = 'visible';
+    }
+    
+    // Add an event listener:
+    InputBox = document.getElementById("Input_PID");
+    InputBox.addEventListener("keydown", function(Event) {
+        // Number 13 is the "Enter" key on the keyboard
+        if (Event.keyCode === 13) {
+            // Cancel the default action, if needed
+            Event.preventDefault();
+            // Submit the form:
+            SubmitForm();
+        }
+    });
+}
+
+function SubmitForm() {
+    SubjectId = document.getElementById('Input_SID').value;
+    LogLanding()
+        .then(function(P1){
+            if (Boolean(P1.TargetUrl)) {
+                window.location.replace(P1.TargetUrl);
+            } else {
+                window.location.replace("./Error.html?SubjectId="+SubjectId+"#");
+            }
+        });
+}
+
+// --- Execute functions ---
+var GetUserInput = false;
+if ((!PoolId) && (!SubjectId)) {
+    // Get user input
+    GetUserInput = true;
+    
+} else {
+    // Call GenSubjectId, no user input required, and then redirect:
+    
+    if (!PoolId && Boolean(SubjectId)) {
+        P1 = LogLanding()
+        .then(function(P1) {
+            if (Boolean(P1.TargetUrl)) {
+                window.location.replace(P1.TargetUrl);
+            } else {
+                window.location.replace("./Error.html?PoolId="+PoolId+"&SubjectId="+SubjectId+"#");
+            }
+        })
+    } else {
+        P1 = GenSubjectId(PoolId)
+            .then(function(P1) {SubjectId = P1.SubjectId;})
+            .then(function(  ) {P2 = LogLanding(); return P2;})
+            .then(function(P2) {
+                if (Boolean(P2.TargetUrl)) {
+                    window.location.replace(P2.TargetUrl);
+                } else {
+                    window.location.replace("./Error.html?PoolId="+PoolId+"&SubjectId="+SubjectId+"#");
+                }
+            });
+    }
+    
+}
+</script>
+
+</head>
+
+<body onload="OnBodyLoad()">
+<!-- BODY -->
+<div class="w3-container" style="width:700px;visibility:hidden" id = "IdForm">
+<h1>Sign in</h1>
+<div>
+Please enter your participation ID.
+<br />
+<br />
+</div>
+<form>
+<table class="w3-table">
+
+<tbody>
+	<tr>
+        <th width="100px" style="text-align:left">Participation ID:</th>
+        <td width="280px"><input id="Input_SID" type="text" name="SID" placeholder="Participation ID" size="26"></td>
+	</tr>
+	<tr>
+	    <th width="100px" style="text-align:left"></th>
+        <td width="280px"><button type="button" onclick="SubmitForm()">Submit</button></td>
+	</tr>
+</tbody>
+
+</table>
+</form>
+</div>
+</body>
+</html>

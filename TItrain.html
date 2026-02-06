@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>TI Training</title>
+
+<!-- Set the favicon logo -->
+<link rel="icon" href="./Logo.png" type="image/x-icon" />
+
+<!-- Unpack the main JSpsych module -->
+<script src="https://unpkg.com/jspsych@7.3.3"></script>
+
+<!-- JSpsych dependency to fullscreen -->
+<script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.1.2"></script>
+
+<!-- JSpsych dependency for HTML button response -->
+<script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+
+<!-- JSpsych dependency for preloading -->
+<script src="https://unpkg.com/@jspsych/plugin-preload@1.1.2"></script>
+
+<!-- JSpsych dependency for styling -->
+<link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" />
+
+<!-- Get jQuery -->
+<script src="./Assets/jquery.min.js"></script>
+
+<!-- More styling -->
+<style>
+body{background-color:black;}
+img:hover{border: 1px solid #00ffff;border-radius: 25px;width: 248px;}
+</style>
+    
+<script>
+// --- TaskIO SETUP ---
+var TaskIO = {};
+TaskIO.SubjectId = null;
+TaskIO.DateTime_Start = null;
+TaskIO.ClientTimeZone = null;
+TaskIO.Pairs = {};
+TaskIO.Trials = [];
+</script>
+
+<!-- Get participant IDs passed in from URL -->
+<script src="./GetPpantIds.js"></script>
+
+<!-- Get DateTime_Start and ClientTimeZone (and add to TaskIO)  -->
+<script src="./Assets/SetDateTime.js"></script>
+
+<!-- Exclusion check -->
+<script src="./Assets/ExclusionCheck.js"></script>
+
+<!-- Import unfocus checking -->
+<script src="./LogUnfocus.js"></script>
+  
+<script>
+// Function to get the stimulus assignments from the Register table
+function GetAssignment(){
+    var JsonPost = {
+        type: "POST",
+        url: './GetAssignment.php',
+        dataType: 'json',
+        data: {FunctionCall: 'GetAssignment', SubjectId: SubjectId},
+        success: function (Obj,Textstatus) {
+            if( !('error' in Obj) ) {
+                  return Obj.result;
+              }
+              else {
+                  console.log(Obj.error);
+              }
+        }
+    }
+    Vals = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Vals)});
+}
+  
+// Function to shuffle an array (used in GetTimelineVars)
+function Shuffle(array) {
+    let currentIndex = array.length,  randomIndex;
+    
+    // While there remain elements to shuffle.
+    while (currentIndex != 0) {
+        // Pick a remaining element.
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        
+        // And swap it with the current element.
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    }
+    return array;
+}
+    
+// Function to get the timeline variables
+async function GetTimelineVars() {
+    var Timeline = [];
+    for (iRep = 0; iRep < 25; iRep++) { /////////////////////////////////////////////// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        var Order = [0,1,2,3,4];
+        Shuffle(Order);
+        for (iOrder = 0; iOrder < 5; iOrder++) {
+            var cPairId = Pairs[Order[iOrder]].PairId;
+            var cPos = Pairs[Order[iOrder]].Pos;
+            var cNeg = Pairs[Order[iOrder]].Neg;
+            var cP1 = await fetch('./Assets/RandBit.php');
+            var cBit = await cP1.json();
+            cBit = cBit==1;
+            Timeline.push({PairId:cPairId,Pos:cPos,Neg:cNeg,PosOnRight:cBit});
+        }
+    }
+    return Timeline;
+}
+
+// Function to save the TaskIO variable
+function WriteTaskIO() {
+    var JsonPost = {
+        type:"POST",
+        url:'./WriteXIO.php',
+        dataType: 'json',
+        data: {FunctionCall: 'WriteTItrainIO', Args: {
+            SubjectId: SubjectId,
+            ClientTimeZone: ClientTimeZone,
+            TItrainIO: JSON.stringify(TaskIO)
+        }},
+        success: function(Obj,Textstatus){
+            if( !('error' in Obj) ){
+                return Obj.result;
+            }
+        }
+    }
+    Response = jQuery.ajax(JsonPost);
+    return new Promise(resolve => {resolve(Response)});
+}
+
+// Import the main jsPsych object
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        var P1 = WriteTaskIO().then(function(P1) {
+            TargetUrl = P1.TargetUrl;
+            window.location.replace(TargetUrl);
+        }).catch(function(Err) {
+            alert('An error has occurred.\nPlease report error code #200 to the experimenter:\n'+Err);
+            window.location.replace("./Error.html");
+        });
+    }
+});
+
+// Set some global variables that are avaible in all functions
+// High-level global variables
+var Assignment;
+var Pairs = [];
+var TimelineVars;
+
+// Trial specific global variables
+var PairId = null;
+var PosOnRight = null;
+var StartTimeOfTrial = null;
+var SelectedRight = null;
+var Correct = null;
+var RT = null;
+var ResponseMade = false;
+
+// Function to set what happens when an image is clicked
+function ImgClicked(Id) {
+    
+    if(!ResponseMade) {
+        // If no response was made previously (i.e., this is the first click)...
+        
+        // Set the response time
+        RT = jsPsych.getTotalTime() - StartTimeOfTrial;
+        
+        // Set SelectedRight
+        if (Id=="ImgLeft") {
+            SelectedRight = false;
+        } else {
+            SelectedRight = true;
+        }
+        
+        // Combine PosOnRight and SelectedRight to set Correct
+        Correct = !(PosOnRight^SelectedRight);
+        
+        // Change the appearence of the stimuli
+        document.getElementById(Id).style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #0000ff; border-radius: 25px; width: 248px;";
+        if (Id=='ImgLeft') {
+            document.getElementById('ImgRight').style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #000000; border-radius: 25px; width: 248px;";
+        } else {
+            document.getElementById('ImgLeft').style = "vertical-align:middle; margin: 0px 60px; border: 1px solid #000000; border-radius: 25px; width: 248px;";
+        }
+        
+        // Set ResponseMade to be true so that the above code cannot be run again during the current trial
+        ResponseMade = true;
+    }
+}
+
+// Specify the preload event
+var PreloadImgs = {
+    type: jsPsychPreload,
+    images: [
+        './Stimuli/i00.png',
+        './Stimuli/i01.png',
+        './Stimuli/i02.png',
+        './Stimuli/i03.png',
+        './Stimuli/i04.png',
+        './Stimuli/i05.png',
+        './Stimuli/i06.png',
+        './Stimuli/i07.png',
+        './Stimuli/i08.png',
+        './Stimuli/i09.png',
+        './Stimuli/i10.png',
+        './Stimuli/i11.png'
+        ]
+};
+
+// Specifiy the EnterFullscreen event
+var EnterFullscreen = {
+    type: jsPsychFullscreen,
+    message: '<p style="color:white;">The task is ready to begin.</p><p style="color:white;">Please click the button below to continue.</p>',
+    fullscreen_mode: true,
+    delay_after: 1000,
+    on_finish: function() {EnforceUnfocus = true;}
+};
+
+// Specifiy the ExitFullscreen event
+var ExitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    on_finish: function() {EnforceUnfocus = false;}
+};
+
+// Specifiy the Fixation event
+var Fixation = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p><font color="#ffffff" size="30px">+</font></p>',
+    choices: [],
+    prompt: "",
+    trial_duration: 1000,
+    
+    // Reseting all the global variables (on_start is called at the begining of the trial)
+    on_start: function() {
+        PairId = jsPsych.timelineVariable('PairId');
+        PosOnRight = jsPsych.timelineVariable('PosOnRight');
+        ResponseMade = false;
+        SelectedRight = null;
+        Correct = null;
+        RT = null;
+    }
+};
+
+// Specify the Trial event
+var Trial = {
+    
+    // Set the start time:
+    on_start: function() {
+        StartTimeOfTrial = jsPsych.getTotalTime();
+    },
+    
+    // Set the type of this trial
+    type: jsPsychHtmlButtonResponse,
+    
+    // Set the stimuli to display
+    stimulus: function(){
+        // Specify the individual part of the stimulus HTML string
+        var Part1 = '<img src="./Stimuli/';
+        var Part3 = '.png" width="250" style="vertical-align:middle;margin:0px 60px" id="ImgLeft" onclick="javascript:ImgClicked(this.id)"> <img src="./Stimuli/';
+        var Part5 = '.png" width="250" style="vertical-align:middle;margin:0px 60px" id="ImgRight" onclick="javascript:ImgClicked(this.id)">';
+        var Pos = jsPsych.timelineVariable('Pos');
+        var Neg = jsPsych.timelineVariable('Neg');
+        
+        // Construct the StimString based on the value of PosOnRight
+        if (jsPsych.timelineVariable('PosOnRight')){
+            var StimString = Part1+Neg+Part3+Pos+Part5;
+        } else {
+            var StimString = Part1+Pos+Part3+Neg+Part5;
+        }
+        return StimString;
+        },
+    
+    // Set the choices and prompt fields to be empty (we don't use them)
+    choices: [],
+    prompt: "",
+    
+    // Set the trial duration
+    trial_duration: 4000,
+    
+    // At the end of the trial, push the results into TaskIO.Trials
+    on_finish: function() {
+        var TrialObj = {
+            PairId: PairId,
+            PosOnRight: PosOnRight,
+            ResponseMade: ResponseMade,
+            Correct: Correct,
+            RT: RT
+        };
+        TaskIO.Trials.push(TrialObj);
+    }
+};
+
+// Specify the Feedback event
+var Feedback = {
+    type: jsPsychHtmlButtonResponse,
+    
+    // Set the feedback to display
+    stimulus: function() {
+        if(ResponseMade) {
+            if(Correct){
+                return '<p style="vertical-align:middle; margin: 0px 5px 30px; color:#00ff00; font-size:120px">&#10003;</p>';
+            }else{
+                return '<p style="vertical-align:middle; margin: 0px 5px 30px; color:#ff0000; font-size:120px">&#10060;</p>';
+            }
+        } else {
+            return '<p style="vertical-align:middle;color:#ff0000;font-size:30px">Please try to respond on time!</p>';
+        }
+    },
+    
+    // Set the choices and prompt fields to be empty (we don't use them)
+    choices: [],
+    prompt: "",
+    
+    // Set the feedback duration (depends on whether a response was made)
+    trial_duration: function() {
+        if(ResponseMade) {
+            return 3000;
+        } else {
+            return 5000;
+        }
+    }
+};
+
+// Chain together the following...
+// ... 1) GetAssignment()
+// ... 2) Make the Pairs variable
+// ... 3) GetTimelineVars()
+// ... 4) Make the TrialLoop
+// ... 5) Call jsPsych.run([TrialLoop])
+// ---
+// (1)...
+GetAssignment().then(function(P1) {
+    Assignment = P1.Assignment;
+    
+    // (2)...
+    for (iPair = 0; iPair < 5; iPair++){
+        var Pos = 't'+String.fromCharCode(65+iPair);
+        var Neg = 't'+String.fromCharCode(66+iPair);
+        Pairs.push({PairId:iPair,Pos:Assignment[Pos],Neg:Assignment[Neg]});
+    }
+    TaskIO.Pairs = Pairs;
+    
+    // (3)...
+    GetTimelineVars().then(function(P2){
+        TimelineVars = P2;
+        
+        // (4)...
+        var TrialLoop = {
+            timeline: [Fixation,Trial,Feedback],
+            timeline_variables: TimelineVars,
+            randomize_order: false
+        };
+        
+        // (5)...
+        jsPsych.run([PreloadImgs,EnterFullscreen,TrialLoop,ExitFullscreen]);
+    });
+});
+
+</script>
+</head>
+<body>
+</body>
+</html>
