@@ -18,5 +18,8 @@ CREATE TABLE `learning_a03_DataStore`.`Register` (
 `DateTime_RCinstr` DATETIME NULL DEFAULT NULL , 
 `DateTime_RCamyli` DATETIME NULL DEFAULT NULL , 
 `DateTime_RCgeorg` DATETIME NULL DEFAULT NULL , 
+`DateTime_TIinstr` DATETIME NULL DEFAULT NULL , 
+`DateTime_TItrain` DATETIME NULL DEFAULT NULL , 
+`DateTime_TIprobe` DATETIME NULL DEFAULT NULL , 
 `DateTime_Complete` DATETIME NULL DEFAULT NULL , 
 PRIMARY KEY (`SubjectId`(8))) ENGINE = MyISAM;
