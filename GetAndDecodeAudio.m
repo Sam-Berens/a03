@@ -29,14 +29,22 @@ catch
 end
 
 %% Loop to download all the files into the temp dir
+AudioLog.Todo = ones(size(AudioLog,1),1);
 for iAudioLog = 1:size(AudioLog,1)
     cFileId = AudioLog.FileId{iAudioLog};
+    if exist(fullfile('.','Audio',[AudioLog.FileId{iAudioLog},'.webm']),'file')==2
+        AudioLog.Todo(iAudioLog) = 0;
+        continue
+    end
     websave(['.',filesep,'temp',filesep,cFileId,'.dat'],...
         ['https://a03.learningandinference.org/AudioData/',cFileId,'.dat']);
 end
 
 %% Loop to convert all the files
 for iAudioLog = 1:size(AudioLog,1)
+    if ~AudioLog.Todo(iAudioLog)
+        continue
+    end
     cFileId = AudioLog.FileId{iAudioLog};
     AudioData = fileread(['.',filesep,'temp',filesep,cFileId,'.dat']);
     DecodedData = matlab.net.base64decode(AudioData);
