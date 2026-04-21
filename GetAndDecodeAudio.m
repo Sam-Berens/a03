@@ -1,14 +1,22 @@
 function [] = GetAndDecodeAudio()
 
-[Credentials] = GetCredentials();
+Credentials = GetCredentials();
 
-% Get the AudioLog data from the server
+%% Create an Audio dir if needs be
+try
+    cd('Audio');
+    cd ..;
+catch
+    mkdir('Audio');
+end
+
+%% Get the AudioLog data from the server
 AudioLog = struct2table(...
-    webwite('https://a03.learningandinference.org/CallGetAudioLog.php',...
+    webwrite('https://a03.learningandinference.org/CallGetAudioLog.php',...
         'Hello',Credentials.Hello));
 AudioLog.AudioDuration = cellfun(@str2double,AudioLog.AudioDuration);
 AudioLog.FileSize = cellfun(@str2double,AudioLog.FileSize);
-writetable(AudioLog,'AudioLog.csv');
+writetable(AudioLog,fullfile('.','Audio','AudioLog.csv'));
 
 %% Create a temp dir if needs be
 MadeNewTempFolder = false;
@@ -25,14 +33,6 @@ for iAudioLog = 1:size(AudioLog,1)
     cFileId = AudioLog.FileId{iAudioLog};
     websave(['.',filesep,'temp',filesep,cFileId,'.dat'],...
         ['https://a03.learningandinference.org/AudioData/',cFileId,'.dat']);
-end
-
-%% Create an Audio dir if needs be
-try
-    cd('Audio');
-    cd ..;
-catch
-    mkdir('Audio');
 end
 
 %% Loop to convert all the files
