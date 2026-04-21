@@ -1,7 +1,11 @@
 function [] = GetAndDecodeAudio()
 
+[Credentials] = GetCredentials();
+
 % Get the AudioLog data from the server
-AudioLog = struct2table(webread('https://a03.learningandinference.org/CallGetAudioLog.php'));
+AudioLog = struct2table(...
+    webwite('https://a03.learningandinference.org/CallGetAudioLog.php',...
+        'Hello',Credentials.Hello));
 AudioLog.AudioDuration = cellfun(@str2double,AudioLog.AudioDuration);
 AudioLog.FileSize = cellfun(@str2double,AudioLog.FileSize);
 writetable(AudioLog,'AudioLog.csv');

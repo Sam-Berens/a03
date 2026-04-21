@@ -8,6 +8,19 @@ if($Conn->connect_error) {
 	die("Connection failed: " . $Conn->connect_error);
 }
 
+// Unpack input
+$Input = json_decode(file_get_contents('php://input'), true);
+if (!$Input) {
+    // If using MATLAB's webwrite function
+	$Input = $_POST;
+}
+$Hello = $Input['Hello'];
+$Hello = mysqli_real_escape_string($Conn, $Hello);
+
+if (!($Hello === $Welcome)) {
+	die("You didn't say hello!");
+}
+
 $Sql = "CALL GetAudioLog()";
 $QueryRes = mysqli_query($Conn,$Sql);
 $iRow = -1;
